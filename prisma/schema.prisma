@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id            Int            @id @default(autoincrement())
+  name          String
+  description   String
+  price         Decimal        @db.Decimal(10, 2)
+  currency      String
+  sizes         String[]
+  defaultSize   String
+  colors        String[]
+  defaultColor  String
+  bestSeller    Boolean
+  image         String
+  subcategory   String
+  rating        Decimal        @db.Decimal(3, 2)
+  discount      Decimal        @db.Decimal(5, 2)
+  newArrival    Boolean
+  tags          String[]
+  stock         Int            @default(0)
+  categoryId    Int
+  category      Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  productCarts  ProductCart[]
+  orderItems    OrderItem[]
+  receiptItems  ReceiptItem[]
+  wishlistItems WishlistItem[]
+
+  @@index([categoryId])
+  @@index([bestSeller])
+  @@index([newArrival])
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  firstname String
+  lastname  String
+  email     String    @unique
+  phone     String
+  image     String?
+  role      Role      @default(USER)
+  address   String
+  password  String
+  createdAt DateTime  @default(now())
+  uuid      String    @unique @default(uuid()) @db.Uuid
+  cart      Cart?
+  orders    Order[]
+  wishlist  Wishlist?
+  addresses Address[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Category {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  products Product[]
+}
+
+model Cart {
+  id           Int           @id @default(autoincrement())
+  userId       Int           @unique
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productCarts ProductCart[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime?      @updatedAt
+}
+
+model ProductCart {
+  productId     Int
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartId        Int
+  cart          Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  selectedColor String?
+  selectedSize  String?
+  quantity      Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime? @updatedAt
+
+  @@id([productId, cartId])
+  @@index([cartId])
+}
+
+model Order {
+  id            Int         @id @default(autoincrement())
+  orderId       String      @unique
+  userId        Int
+  email         String
+  amount        Decimal     @db.Decimal(10, 2)
+  status        OrderStatus @default(PENDING)
+  txRef         String      @unique
+  transactionId String?     @unique
+  cartItems     String // JSON string
+  paymentData   String? // JSON string
+  paidAt        DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  user          User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  orderItems    OrderItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Int
+  price     Decimal @db.Decimal(10, 2)
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Receipt {
+  id            Int           @id @default(autoincrement())
+  userId        Int        
+  orderId       String
+  name          String
+  email         String        
+  phone         String
+  amount        Decimal       @db.Decimal(10, 2)
+  transactionId String
+  status        String
+  receiptItems  ReceiptItem[]
+  createdAt     DateTime      @default(now())
+
+  @@index([userId])
+  @@index([orderId])
+}
+
+model ReceiptItem {
+  id        Int     @id @default(autoincrement())
+  receiptId Int
+  productId Int
+  name      String
+  image     String
+  price     Decimal @db.Decimal(10, 2)
+  quantity  Int
+  total     Decimal @db.Decimal(10, 2)
+  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([receiptId])
+  @@index([productId])
+}
+
+model Wishlist {
+  id        Int            @id @default(autoincrement())
+  userId    Int            @unique
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     WishlistItem[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([userId])
+}
+
+model WishlistItem {
+  id         Int      @id @default(autoincrement())
+  wishlistId Int
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId  Int
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  addedAt    DateTime @default(now())
+
+  @@unique([wishlistId, productId])
+  @@index([wishlistId])
+  @@index([productId])
+}
+
+model Address {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label        String
+  fullName     String
+  phone        String
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  state        String
+  postalCode   String
+  country      String   @default("Nigeria")
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([isDefault])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}

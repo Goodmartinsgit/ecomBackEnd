@@ -1,0 +1,163 @@
+ i am testing this with thunder client, how do i do it? 
+
+● Great question! When testing with Thunder Client, here's how to handle the payment flow:
+
+  Step-by-Step Testing with Thunder Client:
+
+  Step 1: Initialize Payment ✅ (You already did this)
+
+  POST http://localhost:5000/api/payment/initialize
+  Response: Payment link
+
+  Step 2: Complete Payment in Browser
+
+  Since payment requires user interaction (entering card details), you need to:
+
+  1. Copy the payment link from the response:
+  https://checkout-v2.dev-flutterwave.com/v3/hosted/pay/276bfcd5994d603f642a
+  2. Open it in your browser
+  3. Use Flutterwave test card:
+  Card Number: 5531886652142950
+  CVV: 564
+  Expiry: 09/32
+  PIN: 3310
+  OTP: 12345
+  4. Complete the payment
+
+  Step 3: Get the Transaction ID
+
+  After completing payment, you have 3 options to get the transaction_id:
+
+  Option A: From Browser URL (Easiest)
+
+  After payment completes, check the redirect URL in your browser. It will contain the transaction_id:
+  ?transaction_id=1234567&status=successful
+
+  Option B: From Flutterwave Dashboard (Most Reliable)
+
+  1. Login to your Flutterwave Dashboard: https://dashboard.flutterwave.com
+  2. Go to Transactions
+  3. Find your recent transaction
+  4. Copy the Transaction ID
+
+  Option C: Add a Webhook Endpoint (For Automation)
+
+  Let me create a simple webhook endpoint that will log the transaction_id for you:
+
+● Read(ecomBackEnd\routers\paymentRouter.js)
+  ⎿  Read 11 lines
+
+● Let me add a webhook endpoint to make testing easier:
+
+● Update(ecomBackEnd\controllers\paymentController.js)
+  ⎿  Updated ecomBackEnd\controllers\paymentController.js with 39 additions
+        94      }
+        95    };
+        96
+        97 +  exports.paymentWebhook = async (req, res) => {
+        98 +    try {
+        99 +      const payload = req.body;
+       100 +  
+       101 +      console.log('\n🔔 PAYMENT WEBHOOK RECEIVED:');
+       102 +      console.log('==========================================');
+       103 +      console.log('Transaction ID:', payload.data?.id);
+       104 +      console.log('Transaction Ref:', payload.data?.tx_ref);
+       105 +      console.log('Status:', payload.data?.status);
+       106 +      console.log('Amount:', payload.data?.amount);
+       107 +      console.log('Customer Email:', payload.data?.customer?.email);
+       108 +      console.log('Full Payload:', JSON.stringify(payload, null, 2));
+       109 +      console.log('==========================================\n');
+       110 +  
+       111 +      // Verify the webhook is from Flutterwave
+       112 +      const secretHash = process.env.FLW_SECRET_HASH;
+       113 +      const signature = req.headers["verif-hash"];
+       114 +  
+       115 +      if (!signature || signature !== secretHash) {
+       116 +        console.log('❌ Invalid webhook signature');
+       117 +        return res.status(401).json({ message: "Unauthorized" });
+       118 +      }
+       119 +  
+       120 +      // Process successful payment
+       121 +      if (payload.data?.status === "successful") {
+       122 +        // TODO: Update order status in database
+       123 +        // TODO: Clear user cart
+       124 +        // TODO: Send confirmation email
+       125 +  
+       126 +        console.log('✅ Payment successful - Transaction ID:', payload.data?.id);
+       127 +      }
+       128 +  
+       129 +      res.status(200).json({ message: "Webhook received" });
+       130 +    } catch (error) {
+       131 +      console.error("Webhook error:", error.message);
+       132 +      res.status(500).json({ message: "Webhook processing failed" });
+       133 +    }
+       134 +  };
+       135 +  
+       136    exports.verifyPayment = async (req, res) => {
+       137      const { transaction_id } = req.query;
+       138
+
+● Update(ecomBackEnd\routers\paymentRouter.js)
+  ⎿  Updated ecomBackEnd\routers\paymentRouter.js with 2 additions and 1 removal
+        1    const express = require("express");
+        2 -  const { initializePayment, verifyPayment } = require("../controllers/paymentController");
+        2 +  const { initializePayment, verifyPayment, paymentWebhook } = require("../controllers/paymentController");
+        3    const { isUser } = require("../middlewares/auth");
+        4    const paymentRouter = express.Router();
+        5
+        6    // Routes: /api/payment
+        7    paymentRouter.post("/initialize", isUser, initializePayment);
+        8    paymentRouter.get("/verify", verifyPayment);
+        9 +  paymentRouter.post("/webhook", paymentWebhook);
+       10
+       11    module.exports = paymentRouter;
+
+● Perfect! I've added a webhook endpoint. Here's the simplest way to test with Thunder Client:
+
+  Quick Testing Guide:
+
+  Method 1: Browser + Flutterwave Dashboard (Recommended for Thunder Client)
+
+  Step 1: Initialize payment with Thunder Client ✅
+  POST http://localhost:5000/api/payment/initialize
+
+  Step 2: Complete payment in browser
+  1. Copy the payment link
+  2. Open in browser
+  3. Use test card to complete payment
+
+  Step 3: Get Transaction ID from Flutterwave Dashboard
+  1. Go to: https://dashboard.flutterwave.com/dashboard/transactions
+  2. Login with your Flutterwave test account
+  3. Find your latest transaction
+  4. Copy the Transaction ID (will look like a number: 3456789)
+
+  Step 4: Verify payment with Thunder Client
+  GET http://localhost:5000/api/payment/verify?transaction_id=3456789
+
+  ---
+  Method 2: Using the Webhook (For automation)
+
+  I've added a webhook endpoint that will log the transaction ID to your console.
+
+  To use it:
+
+  1. Add this to your .env file:
+  FLW_SECRET_HASH=your-secret-hash
+  2. Expose your local server (use ngrok):
+  ngrok http 5000
+  2. You'll get a URL like: https://abc123.ngrok.io
+  3. Configure webhook in Flutterwave Dashboard:
+    - Go to Settings → Webhooks
+    - Add: https://abc123.ngrok.io/api/payment/webhook
+  4. Watch your console - After payment, the transaction ID will be logged automatically!
+
+  ---
+  For Quick Testing - Just Do This:
+
+  1. ✅ Initialize payment (Thunder Client)
+  2. 🌐 Complete payment in browser
+  3. 📊 Check Flutterwave Dashboard for transaction ID
+  4. ✅ Verify payment (Thunder Client) with that transaction ID
+
+  That's it! Would you like me to help with any of these steps?
