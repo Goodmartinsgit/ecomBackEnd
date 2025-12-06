@@ -430,7 +430,13 @@ exports.forgotPassword = async (req, res) => {
 
     // Send reset email
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    await sendPasswordReset(user.email, resetLink);
+    try {
+      await sendPasswordReset(user.email, resetLink);
+      console.log(`Password reset email sent to: ${user.email}`);
+    } catch (emailError) {
+      console.error('Failed to send password reset email:', emailError);
+      // Continue without throwing error to prevent user enumeration
+    }
 
     return res.status(200).json({
       success: true,

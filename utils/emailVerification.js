@@ -33,13 +33,17 @@ const sendVerification = async (email, verificationLink) => {
   };
 
   try {
-    // Add timeout to prevent hanging
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Email timeout')), 10000)
+      setTimeout(() => reject(new Error('Email timeout')), 30000)
     );
-    await Promise.race([transporter.sendMail(mailOption), timeoutPromise]);
+    const result = await Promise.race([transporter.sendMail(mailOption), timeoutPromise]);
+    console.log('Email sent successfully:', result.messageId);
   } catch (error) {
-    console.error("Unable to send mail", error.message);
+    console.error("Email send failed:", {
+      message: error.message,
+      code: error.code,
+      command: error.command
+    });
     throw error;
   }
 };
@@ -76,11 +80,16 @@ const sendPasswordReset = async (email, resetLink) => {
 
   try {
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Email timeout')), 10000)
+      setTimeout(() => reject(new Error('Email timeout')), 30000)
     );
-    await Promise.race([transporter.sendMail(mailOption), timeoutPromise]);
+    const result = await Promise.race([transporter.sendMail(mailOption), timeoutPromise]);
+    console.log('Password reset email sent successfully:', result.messageId);
   } catch (error) {
-    console.error("Unable to send password reset email", error.message);
+    console.error("Password reset email failed:", {
+      message: error.message,
+      code: error.code,
+      command: error.command
+    });
     throw error;
   }
 };
