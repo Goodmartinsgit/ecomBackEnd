@@ -40,24 +40,27 @@ model Product {
 }
 
 model User {
-  id        Int       @id @default(autoincrement())
-  firstname String
-  lastname  String
-  email     String    @unique
-  phone     String
-  image     String?
-  role      Role      @default(USER)
-  address   String
-  password  String
-  createdAt DateTime  @default(now())
-  uuid      String    @unique @default(uuid()) @db.Uuid
-  cart      Cart?
-  orders    Order[]
-  wishlist  Wishlist?
-  addresses Address[]
+  id               Int       @id @default(autoincrement())
+  firstname        String
+  lastname         String
+  email            String    @unique
+  phone            String
+  image            String?
+  role             Role      @default(USER)
+  address          String
+  password         String
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  createdAt        DateTime  @default(now())
+  uuid             String    @unique @default(uuid()) @db.Uuid
+  cart             Cart?
+  orders           Order[]
+  wishlist         Wishlist?
+  addresses        Address[]
 
   @@index([email])
   @@index([role])
+  @@index([resetToken])
 }
 
 model Category {

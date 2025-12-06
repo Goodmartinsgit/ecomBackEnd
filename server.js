@@ -110,6 +110,8 @@ app.use((req, res) => {
     availableRoutes: [
       "POST /api/users/register",
       "POST /api/users/login",
+      "POST /api/users/forgot-password",
+      "POST /api/users/reset-password",
       "GET /api/products",
       "GET /api/categories",
       "POST /api/payment/initialize",
