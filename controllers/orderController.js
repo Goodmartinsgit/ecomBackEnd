@@ -139,6 +139,14 @@ exports.cancelOrder = async (req, res) => {
 // GET order statistics for dashboard
 exports.getOrderStats = async (req, res) => {
   try {
+    // Check if user exists
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated"
+      });
+    }
+
     const userId = req.user.id;
 
     const [totalOrders, pendingOrders, completedOrders, totalSpent] = await Promise.all([
@@ -164,7 +172,8 @@ exports.getOrderStats = async (req, res) => {
     console.error("Get order stats error:", error);
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch order statistics"
+      message: "Failed to fetch order statistics",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };

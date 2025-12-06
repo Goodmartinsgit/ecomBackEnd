@@ -216,6 +216,22 @@ exports.getCart = async (req, res) => {
     const userId = parseInt(userid);
 
     try {
+        // Check if user is authenticated and authorized
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({
+                success: false,
+                message: "User not authenticated"
+            });
+        }
+
+        // Check if user is accessing their own cart
+        if (req.user.id !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. You can only access your own cart."
+            });
+        }
+
         const userCart = await prisma.cart.findUnique({
             where: { userId },
             include: {
@@ -226,9 +242,20 @@ exports.getCart = async (req, res) => {
         });
 
         if (!userCart) {
-            return res.status(404).json({
-                success: false,
-                message: "User cart does not exist!"
+            // Create empty cart if it doesn't exist
+            const newCart = await prisma.cart.create({
+                data: { userId },
+                include: {
+                    productCarts: {
+                        include: { product: true }
+                    }
+                }
+            });
+            
+            return res.status(200).json({
+                success: true,
+                message: "Empty cart created",
+                data: newCart
             });
         }
 
@@ -242,7 +269,8 @@ exports.getCart = async (req, res) => {
         console.error("Get cart error:", error);
         return res.status(500).json({
             success: false,
-            message: "Internal server error!"
+            message: "Internal server error!",
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
