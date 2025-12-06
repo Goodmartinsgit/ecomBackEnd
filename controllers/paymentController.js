@@ -147,8 +147,11 @@ exports.verifyPayment = async (req, res) => {
   const { transaction_id, status, tx_ref } = req.query;
 
   try {
+    console.log("Payment verification started:", { transaction_id, status, tx_ref });
+
     // Validate query parameters
     if (!transaction_id) {
+      console.error("Missing transaction_id");
       return res.status(400).json({
         success: false,
         message: "Transaction ID is required!"
@@ -165,6 +168,7 @@ exports.verifyPayment = async (req, res) => {
     }
 
     // Verify transaction with Flutterwave
+    console.log("Verifying with Flutterwave...");
     const response = await fetch(
       `https://api.flutterwave.com/v3/transactions/${transaction_id}/verify`,
       {
@@ -180,13 +184,16 @@ exports.verifyPayment = async (req, res) => {
       console.error("Flutterwave verification error:", response.status, errorText);
       return res.status(500).json({
         success: false,
-        message: "Payment verification failed!"
+        message: "Payment verification failed!",
+        error: process.env.NODE_ENV === 'development' ? errorText : undefined
       });
     }
 
     const data = await response.json();
+    console.log("Flutterwave response:", JSON.stringify(data, null, 2));
 
     if (data.status !== "success" || data.data.status !== "successful") {
+      console.error("Payment not successful:", data);
       return res.status(400).json({
         success: false,
         message: "Payment was not successful!"
@@ -197,7 +204,10 @@ exports.verifyPayment = async (req, res) => {
     const orderId = data.data.tx_ref;
     const totalPrice = data.data.amount;
 
+    console.log("Extracted data:", { userId, orderId, totalPrice });
+
     if (!userId) {
+      console.error("User ID not found in meta data");
       return res.status(400).json({
         success: false,
         message: "User ID not found in transaction data!"
@@ -205,17 +215,21 @@ exports.verifyPayment = async (req, res) => {
     }
 
     // Get user and cart
+    console.log("Fetching user with ID:", userId);
     const user = await prisma.user.findUnique({
       where: { id: parseInt(userId) }
     });
 
     if (!user) {
+      console.error("User not found:", userId);
       return res.status(400).json({
         success: false,
         message: "User not found!"
       });
     }
 
+    console.log("User found:", user.email);
+    console.log("Fetching user cart...");
     const userCart = await prisma.cart.findUnique({
       where: { userId: parseInt(userId) },
       include: {
@@ -224,6 +238,7 @@ exports.verifyPayment = async (req, res) => {
         }
       }
     });
+    console.log("Cart items count:", userCart?.productCarts?.length || 0);
 
     if (!userCart || !userCart.productCarts.length) {
       console.warn(`Cart empty for user ${userId}, creating order without cart items`);
@@ -257,6 +272,7 @@ exports.verifyPayment = async (req, res) => {
     }
 
     // Create order
+    console.log("Creating order...");
     const order = await prisma.order.create({
       data: {
         orderId: orderId,
@@ -285,37 +301,56 @@ exports.verifyPayment = async (req, res) => {
     });
 
     // Create receipt with items
-    const receipt = await prisma.receipt.create({
-      data: {
-        userId: parseInt(userId),
-        orderId: orderId,
-        name: `${user.firstname} ${user.lastname}`,
-        email: user.email,
-        phone: user.phone,
-        amount: totalPrice,
-        transactionId: transaction_id,
-        status: "COMPLETED",
-        receiptItems: {
-          create: userCart.productCarts.map(item => ({
-            productId: item.productId,
-            name: item.product.name,
-            image: item.product.image,
-            price: item.product.price,
-            quantity: item.quantity || 1,
-            total: item.product.price * (item.quantity || 1)
-          }))
+    let receiptItems = [];
+    try {
+      console.log("Creating receipt...");
+      const receipt = await prisma.receipt.create({
+        data: {
+          userId: parseInt(userId),
+          orderId: orderId,
+          name: `${user.firstname} ${user.lastname}`,
+          email: user.email,
+          phone: user.phone,
+          amount: totalPrice,
+          transactionId: transaction_id,
+          status: "COMPLETED",
+          receiptItems: {
+            create: userCart.productCarts.map(item => ({
+              productId: item.productId,
+              name: item.product.name,
+              image: item.product.image,
+              price: item.product.price,
+              quantity: item.quantity || 1,
+              total: item.product.price * (item.quantity || 1)
+            }))
+          }
+        },
+        include: {
+          receiptItems: true
         }
-      },
-      include: {
-        receiptItems: true
-      }
-    });
+      });
+      receiptItems = receipt.receiptItems;
+      console.log("Receipt created successfully");
+    } catch (receiptError) {
+      console.error("Failed to create receipt:", receiptError);
+      // Continue without receipt - order is already created
+      receiptItems = userCart.productCarts.map(item => ({
+        productId: item.productId,
+        name: item.product.name,
+        image: item.product.image,
+        price: item.product.price,
+        quantity: item.quantity || 1,
+        total: item.product.price * (item.quantity || 1)
+      }));
+    }
 
     // Clear user's cart
+    console.log("Clearing cart...");
     await prisma.productCart.deleteMany({
       where: { cartId: userCart.id }
     });
 
+    console.log("Payment verification completed successfully");
     return res.status(200).json({
       success: true,
       message: "Payment verified successfully!",
@@ -324,15 +359,17 @@ exports.verifyPayment = async (req, res) => {
         transactionId: transaction_id,
         totalPrice: totalPrice,
         order: order,
-        receiptItems: receipt.receiptItems
+        receiptItems: receiptItems
       }
     });
 
   } catch (error) {
     console.error("Verify payment error:", error);
+    console.error("Error stack:", error.stack);
     return res.status(500).json({
       success: false,
-      message: "Something went wrong during verification!"
+      message: "Something went wrong during verification!",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
