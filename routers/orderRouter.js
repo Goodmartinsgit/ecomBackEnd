@@ -4,6 +4,20 @@ const { getUserOrders, getOrderDetails, cancelOrder, getOrderStats, getAllOrders
 const { isUser, isAdmin } = require('../middlewares/auth');
 
 // Routes: /api/orders
+// Test endpoint for debugging
+orderRouter.get('/test', isUser, (req, res) => {
+  res.json({
+    success: true,
+    message: 'Order router is working',
+    user: {
+      id: req.user?.id,
+      role: req.user?.role,
+      email: req.user?.email
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
 orderRouter.get('/stats', isUser, getOrderStats);
 orderRouter.get('/', isUser, getUserOrders);
 orderRouter.get('/:orderId', isUser, getOrderDetails);

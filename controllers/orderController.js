@@ -1,5 +1,13 @@
 const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  errorFormat: 'pretty'
+});
+
+// Handle Prisma client disconnection
+process.on('beforeExit', async () => {
+  await prisma.$disconnect();
+});
 
 // GET user orders with pagination and filtering
 exports.getUserOrders = async (req, res) => {
@@ -141,6 +149,7 @@ exports.getOrderStats = async (req, res) => {
   try {
     // Check if user exists
     if (!req.user || !req.user.id) {
+      console.error("Order stats - User not authenticated:", req.user);
       return res.status(401).json({
         success: false,
         message: "User not authenticated"
@@ -148,6 +157,18 @@ exports.getOrderStats = async (req, res) => {
     }
 
     const userId = req.user.id;
+    console.log("Fetching order stats for user:", userId);
+
+    // Test database connection first
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch (dbError) {
+      console.error("Database connection error:", dbError);
+      return res.status(500).json({
+        success: false,
+        message: "Database connection failed"
+      });
+    }
 
     const [totalOrders, pendingOrders, completedOrders, totalSpent] = await Promise.all([
       prisma.order.count({ where: { userId } }),
@@ -159,6 +180,13 @@ exports.getOrderStats = async (req, res) => {
       })
     ]);
 
+    console.log("Order stats fetched successfully:", {
+      totalOrders,
+      pendingOrders,
+      completedOrders,
+      totalSpent: totalSpent._sum.amount || 0
+    });
+
     return res.status(200).json({
       success: true,
       data: {
@@ -169,7 +197,12 @@ exports.getOrderStats = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Get order stats error:", error);
+    console.error("Get order stats error:", {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      userId: req.user?.id
+    });
     return res.status(500).json({
       success: false,
       message: "Failed to fetch order statistics",
@@ -239,6 +272,19 @@ exports.getAllOrders = async (req, res) => {
 // ADMIN: Get order statistics
 exports.getAdminOrderStats = async (req, res) => {
   try {
+    console.log("Fetching admin order stats");
+    
+    // Test database connection first
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch (dbError) {
+      console.error("Database connection error:", dbError);
+      return res.status(500).json({
+        success: false,
+        message: "Database connection failed"
+      });
+    }
+
     const [totalOrders, pendingOrders, completedOrders, cancelledOrders, totalRevenue] = await Promise.all([
       prisma.order.count(),
       prisma.order.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
@@ -249,6 +295,14 @@ exports.getAdminOrderStats = async (req, res) => {
         _sum: { amount: true }
       })
     ]);
+
+    console.log("Admin order stats fetched successfully:", {
+      totalOrders,
+      pendingOrders,
+      completedOrders,
+      cancelledOrders,
+      totalRevenue: totalRevenue._sum.amount || 0
+    });
 
     return res.status(200).json({
       success: true,
@@ -261,10 +315,15 @@ exports.getAdminOrderStats = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Get admin order stats error:", error);
+    console.error("Get admin order stats error:", {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch order statistics"
+      message: "Failed to fetch order statistics",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
