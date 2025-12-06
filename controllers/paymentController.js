@@ -249,18 +249,12 @@ exports.verifyPayment = async (req, res) => {
           userId: parseInt(userId),
           email: user.email,
           amount: totalPrice,
-          status: "PENDING",
+          status: "COMPLETED",
           txRef: orderId,
           transactionId: transaction_id,
           cartItems: "[]",
           paymentData: JSON.stringify(data.data),
-          paidAt: new Date(),
-          trackingHistory: {
-            create: {
-              status: "PENDING",
-              description: "Order placed and payment confirmed"
-            }
-          }
+          paidAt: new Date()
         }
       });
 
@@ -285,7 +279,7 @@ exports.verifyPayment = async (req, res) => {
         userId: parseInt(userId),
         email: user.email,
         amount: totalPrice,
-        status: "PENDING",
+        status: "COMPLETED",
         txRef: orderId,
         transactionId: transaction_id,
         cartItems: JSON.stringify(userCart.productCarts),
@@ -297,19 +291,12 @@ exports.verifyPayment = async (req, res) => {
             quantity: item.quantity || 1,
             price: item.product.price
           }))
-        },
-        trackingHistory: {
-          create: {
-            status: "PENDING",
-            description: "Order placed and payment confirmed"
-          }
         }
       },
       include: {
         orderItems: {
           include: { product: true }
-        },
-        trackingHistory: true
+        }
       }
     });
 
