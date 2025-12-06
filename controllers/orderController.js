@@ -143,10 +143,10 @@ exports.getOrderStats = async (req, res) => {
 
     const [totalOrders, pendingOrders, completedOrders, totalSpent] = await Promise.all([
       prisma.order.count({ where: { userId } }),
-      prisma.order.count({ where: { userId, status: 'PENDING' } }),
-      prisma.order.count({ where: { userId, status: 'COMPLETED' } }),
+      prisma.order.count({ where: { userId, status: { in: ['PENDING', 'PROCESSING'] } } }),
+      prisma.order.count({ where: { userId, status: 'DELIVERED' } }),
       prisma.order.aggregate({
-        where: { userId, status: 'COMPLETED' },
+        where: { userId, status: 'DELIVERED' },
         _sum: { amount: true }
       })
     ]);
@@ -232,11 +232,11 @@ exports.getAdminOrderStats = async (req, res) => {
   try {
     const [totalOrders, pendingOrders, completedOrders, cancelledOrders, totalRevenue] = await Promise.all([
       prisma.order.count(),
-      prisma.order.count({ where: { status: 'PENDING' } }),
-      prisma.order.count({ where: { status: 'COMPLETED' } }),
+      prisma.order.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
+      prisma.order.count({ where: { status: 'DELIVERED' } }),
       prisma.order.count({ where: { status: 'CANCELLED' } }),
       prisma.order.aggregate({
-        where: { status: 'COMPLETED' },
+        where: { status: 'DELIVERED' },
         _sum: { amount: true }
       })
     ]);
@@ -266,7 +266,7 @@ exports.updateOrderStatus = async (req, res) => {
     const { orderId } = req.params;
     const { status, location, description, trackingNumber } = req.body;
 
-    const validStatuses = ['PENDING', 'PROCESSING', 'SHIPPED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'COMPLETED', 'FAILED', 'CANCELLED'];
+    const validStatuses = ['PENDING', 'PROCESSING', 'SHIPPED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'FAILED', 'CANCELLED'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
