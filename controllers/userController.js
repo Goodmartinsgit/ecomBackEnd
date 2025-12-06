@@ -54,8 +54,7 @@ exports.registerUser = async (req, res) => {
     if (password !== confirmpassword) {
       return res.status(400).json({ success: false, message: "Password and confirm password do not match!" });
     }
-    const salt = await bcrypt.genSalt(12);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     let imageUrl
 
@@ -90,18 +89,21 @@ exports.registerUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "User creation failed!" });
     }
 
-    const verificationLink = `${process.env.FRONTEND_URL}/verify-email?uuid=${newUser.uuid}`;
-    await sendVerification(newUser.email, verificationLink);
-
     // Generate token for immediate login after registration
     const token = generateToken(newUser);
 
     // Remove password from user object before sending
     const { password: _, ...userData } = newUser;
 
+    // Send verification email asynchronously (don't wait)
+    const verificationLink = `${process.env.FRONTEND_URL}/verify-email?uuid=${newUser.uuid}`;
+    sendVerification(newUser.email, verificationLink).catch(err => 
+      console.error('Email verification failed:', err)
+    );
+
     return res.status(201).json({
       success: true,
-      message: "User created successfully!",
+      message: "User created successfully! Check your email for verification.",
       token,
       data: userData
     });
@@ -284,8 +286,7 @@ exports.changePassword = async (req, res) => {
       });
     }
 
-    const salt = await bcrypt.genSalt(12);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     await prisma.user.update({
       where: { id: userId },

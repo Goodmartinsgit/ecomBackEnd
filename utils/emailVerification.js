@@ -33,7 +33,11 @@ const sendVerification = async (email, verificationLink) => {
   };
 
   try {
-    await transporter.sendMail(mailOption);
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Email timeout')), 10000)
+    );
+    await Promise.race([transporter.sendMail(mailOption), timeoutPromise]);
   } catch (error) {
     console.error("Unable to send mail", error.message);
     throw error;
