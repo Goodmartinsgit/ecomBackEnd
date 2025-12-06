@@ -11,6 +11,7 @@ const paymentRouter = require("./routers/paymentRouter");
 const addressRouter = require("./routers/addressRouter");
 const orderRouter = require("./routers/orderRouter");
 const wishlistRouter = require("./routers/wishlistRouter");
+const reviewRouter = require("./routers/reviewRouter");
 
 dotenv.config();
 
@@ -98,6 +99,7 @@ app.use("/api/payment", paymentRouter);
 app.use("/api/addresses", addressRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/wishlist", wishlistRouter);
+app.use("/api/reviews", reviewRouter);
 
 // 404 handler for undefined routes
 app.use((req, res) => {

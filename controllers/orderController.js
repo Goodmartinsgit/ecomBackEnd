@@ -68,7 +68,11 @@ exports.getOrderDetails = async (req, res) => {
           include: {
             product: true
           }
-        }
+        },
+        trackingHistory: {
+          orderBy: { createdAt: 'desc' }
+        },
+        reviews: true
       }
     });
 
@@ -260,9 +264,9 @@ exports.getAdminOrderStats = async (req, res) => {
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { status } = req.body;
+    const { status, location, description, trackingNumber } = req.body;
 
-    const validStatuses = ['PENDING', 'COMPLETED', 'FAILED', 'CANCELLED'];
+    const validStatuses = ['PENDING', 'PROCESSING', 'SHIPPED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'COMPLETED', 'FAILED', 'CANCELLED'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -281,9 +285,20 @@ exports.updateOrderStatus = async (req, res) => {
       });
     }
 
+    // Update order and create tracking entry
     const updatedOrder = await prisma.order.update({
       where: { orderId: orderId },
-      data: { status },
+      data: { 
+        status,
+        trackingNumber: trackingNumber || order.trackingNumber,
+        trackingHistory: {
+          create: {
+            status,
+            location: location || null,
+            description: description || `Order status updated to ${status}`
+          }
+        }
+      },
       include: {
         user: {
           select: {
@@ -297,6 +312,9 @@ exports.updateOrderStatus = async (req, res) => {
           include: {
             product: true
           }
+        },
+        trackingHistory: {
+          orderBy: { createdAt: 'desc' }
         }
       }
     });
@@ -311,6 +329,51 @@ exports.updateOrderStatus = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to update order status"
+    });
+  }
+};
+
+// GET order tracking history
+exports.getOrderTracking = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const userId = req.user?.id;
+
+    const where = { orderId };
+    if (req.user.role !== 'ADMIN') {
+      where.userId = userId;
+    }
+
+    const order = await prisma.order.findFirst({
+      where,
+      include: {
+        trackingHistory: {
+          orderBy: { createdAt: 'desc' }
+        }
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        orderId: order.orderId,
+        status: order.status,
+        trackingNumber: order.trackingNumber,
+        trackingHistory: order.trackingHistory
+      }
+    });
+  } catch (error) {
+    console.error("Get order tracking error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch order tracking"
     });
   }
 };
