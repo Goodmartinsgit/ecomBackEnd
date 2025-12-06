@@ -253,6 +253,33 @@ exports.verifyPayment = async (req, res) => {
       }
     });
 
+    // Create receipt with items
+    const receipt = await prisma.receipt.create({
+      data: {
+        userId: parseInt(userId),
+        orderId: orderId,
+        name: `${user.firstname} ${user.lastname}`,
+        email: user.email,
+        phone: user.phone,
+        amount: totalPrice,
+        transactionId: transaction_id,
+        status: "COMPLETED",
+        receiptItems: {
+          create: userCart.productCarts.map(item => ({
+            productId: item.productId,
+            name: item.product.name,
+            image: item.product.image,
+            price: item.product.price,
+            quantity: item.quantity || 1,
+            total: item.product.price * (item.quantity || 1)
+          }))
+        }
+      },
+      include: {
+        receiptItems: true
+      }
+    });
+
     // Clear user's cart
     await prisma.productCart.deleteMany({
       where: { cartId: userCart.id }
@@ -265,7 +292,8 @@ exports.verifyPayment = async (req, res) => {
         orderId: order.id,
         transactionId: transaction_id,
         totalPrice: totalPrice,
-        order: order
+        order: order,
+        receiptItems: receipt.receiptItems
       }
     });
 

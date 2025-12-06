@@ -70,12 +70,10 @@ exports.addToWishlist = async (req, res) => {
     });
 
     // Check if already in wishlist
-    const existing = await prisma.wishlistItem.findUnique({
+    const existing = await prisma.wishlistItem.findFirst({
       where: {
-        wishlistId_productId: {
-          wishlistId: wishlist.id,
-          productId: parseInt(productId)
-        }
+        wishlistId: wishlist.id,
+        productId: parseInt(productId)
       }
     });
 
@@ -127,12 +125,10 @@ exports.removeFromWishlist = async (req, res) => {
       });
     }
 
-    const wishlistItem = await prisma.wishlistItem.findUnique({
+    const wishlistItem = await prisma.wishlistItem.findFirst({
       where: {
-        wishlistId_productId: {
-          wishlistId: wishlist.id,
-          productId: parseInt(productId)
-        }
+        wishlistId: wishlist.id,
+        productId: parseInt(productId)
       }
     });
 
@@ -145,10 +141,7 @@ exports.removeFromWishlist = async (req, res) => {
 
     await prisma.wishlistItem.delete({
       where: {
-        wishlistId_productId: {
-          wishlistId: wishlist.id,
-          productId: parseInt(productId)
-        }
+        id: wishlistItem.id
       }
     });
 
