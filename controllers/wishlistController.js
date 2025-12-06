@@ -43,10 +43,13 @@ exports.addToWishlist = async (req, res) => {
     const userId = req.user.id;
     const { productId } = req.body;
 
+    console.log('Add to wishlist request:', { userId, productId, body: req.body });
+
     if (!productId) {
       return res.status(400).json({
         success: false,
-        message: "Product ID is required"
+        message: "Product ID is required",
+        received: req.body
       });
     }
 
