@@ -326,7 +326,7 @@ exports.verifyPayment = async (req, res) => {
           phone: user.phone,
           amount: totalPrice,
           transactionId: transaction_id,
-          status: "COMPLETED",
+          status: "Order Placed",
           receiptItems: {
             create: userCart.productCarts.map(item => ({
               productId: item.productId,
