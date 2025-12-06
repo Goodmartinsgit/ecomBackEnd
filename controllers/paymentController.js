@@ -70,8 +70,6 @@ exports.initializePayment = async (req, res) => {
       tx_ref: orderId,
       amount: totalPrice,
       currency: "NGN",
-    //   redirect_url: "http://localhost:5000/verify",
-      // redirect_url: "http://localhost:5000/api/payment/verify",
       redirect_url: `${process.env.FRONTEND_URL}/verify-payment`,
       customer: {
         email: user.email,

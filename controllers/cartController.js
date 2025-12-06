@@ -8,22 +8,7 @@ exports.addToCart = async (req, res) => {
     const productId = parseInt(productid);
 
     try {
-        // // Check if user has a cart
-        // let existingCart = await prisma.cart.findUnique({
-        //     where: { userId }
-        // });
-
-        
-        // // Create a cart if none exists
-        // if (!existingCart) {
-        //     existingCart = await prisma.cart.upsert({
-        //         data: { userId }
-        //     });
-        // }
-
-        
-
-        const existingCart =await prisma.cart.upsert({
+        const existingCart = await prisma.cart.upsert({
             where: { userId },
             update: {},
             create: { userId },
@@ -88,7 +73,7 @@ exports.addToCart = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("error", error);
+        console.error("Add to cart error:", error);
         return res.status(500).json({
             success: false,
             message: "Internal server error!"
@@ -109,7 +94,7 @@ exports.updateCart = async (req, res) => {
         });
 
         if (!userCart) {
-            return res.status(400).json({
+            return res.status(404).json({
                 success: false,
                 message: "Cart does not exist!"
             });
@@ -125,7 +110,7 @@ exports.updateCart = async (req, res) => {
         });
 
         if (!cartItem) {
-            return res.status(400).json({
+            return res.status(404).json({
                 success: false,
                 message: "Item not found in cart!"
             });
@@ -155,7 +140,7 @@ exports.updateCart = async (req, res) => {
         });
 
     } catch (error) {
-        console.log("error", error);
+        console.error("Update cart error:", error);
         return res.status(500).json({
             success: false,
             message: "Internal server error!"
@@ -178,7 +163,7 @@ exports.deleteCart = async (req, res) => {
         });
 
         if (!existingCart) {
-            return res.status(400).json({
+            return res.status(404).json({
                 success: false,
                 message: "User cart does not exist!"
             });
@@ -194,7 +179,7 @@ exports.deleteCart = async (req, res) => {
         });
 
         if (!existingCartItem) {
-            return res.status(400).json({
+            return res.status(404).json({
                 success: false,
                 message: "Cart item does not exist!"
             });
@@ -216,7 +201,7 @@ exports.deleteCart = async (req, res) => {
         });
 
     } catch (error) {
-        console.log("error", error);
+        console.error("Delete cart error:", error);
         return res.status(500).json({
             success: false,
             message: "Internal server error!"
@@ -241,7 +226,7 @@ exports.getCart = async (req, res) => {
         });
 
         if (!userCart) {
-            return res.status(400).json({
+            return res.status(404).json({
                 success: false,
                 message: "User cart does not exist!"
             });
@@ -254,10 +239,10 @@ exports.getCart = async (req, res) => {
         });
 
     } catch (error) {
-        console.log("error", error);
+        console.error("Get cart error:", error);
         return res.status(500).json({
             success: false,
-            message: "Something went wrong!"
+            message: "Internal server error!"
         });
     }
 };

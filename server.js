@@ -1,6 +1,8 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const userRouter = require("./routers/userRouter");
 const { categoryRouter } = require("./routers/categoryRouter");
 const productRouter = require("./routers/productRouter");
@@ -24,46 +26,41 @@ if (missingEnvVars.length > 0) {
 }
 const app = express();
 
-// CORS configuration
+// CORS configuration (must be before other middleware)
 app.use(cors({
-  origin: process.env.FRONTEND_URL,
+  origin: process.env.FRONTEND_URL || "http://localhost:5173",
   credentials: true
 }));
+
+// Security middleware with relaxed settings for API
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false
+}));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: {
+    success: false,
+    message: "Too many requests from this IP, please try again later."
+  }
+});
+app.use(limiter);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// URL normalization middleware - fix double slashes and trailing slashes
-// app.use((req, res, next) => {
-//   let path = req.path;
-//   let needsRedirect = false;
 
-//   // Remove double slashes
-//   if (path.includes('//')) {
-//     path = path.replace(/\/+/g, '/');
-//     needsRedirect = true;
-//   }
 
-//   // Remove trailing slash (except for root path)
-//   if (path !== '/' && path.endsWith('/')) {
-//     path = path.slice(0, -1);
-//     needsRedirect = true;
-//   }
-
-//   // Redirect to normalized URL
-//   if (needsRedirect) {
-//     req.url = path;
-//   }
-
-//   next();
-// });
-
-// Request logging middleware
-app.use((req, res, next) => {
-  console.log(`\n📨 ${req.method} ${req.originalUrl}`);
-  console.log(`Headers:`, req.headers);
-  next();
-});
+// Request logging middleware (only in development)
+if (process.env.NODE_ENV === 'development') {
+  app.use((req, res, next) => {
+    console.log(`\n📨 ${req.method} ${req.originalUrl}`);
+    next();
+  });
+}
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -129,140 +126,6 @@ app.listen(port, () => {
   console.log(`👤 Register: http://localhost:${port}/api/users/register`);
   console.log(`🔐 Login: http://localhost:${port}/api/users/login\n`);
 });
-
-
-
-
-
-
-
-// const express = require("express");
-// const dotenv = require("dotenv");
-// const cors = require("cors");
-// const helmet = require("helmet");
-// const compression = require("compression");
-// const rateLimit = require("express-rate-limit");
-// const userRouter = require("./routers/userRouter");
-// const { categoryRouter } = require("./routers/categoryRouter");
-// const productRouter = require("./routers/productRouter");
-
-// dotenv.config();
-// const app = express();
-
-// // Security middleware
-// // app.use(helmet());
-
-// // CORS configuration
-// app.use(cors({
-//   origin: process.env.FRONTEND_URL || "http://localhost:3000",
-//   credentials: true
-// }));
-
-// // Compression middleware
-// app.use(compression());
-
-// // Rate limiting
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000, // 15 minutes
-//   max: 1000, // limit each IP to 1000 requests per windowMs
-//   message: {
-//     success: false,
-//     error: "Too many requests from this IP, please try again later."
-//   }
-// });
-// app.use(limiter);
-
-// // Body parsing middleware
-// app.use(express.json({ limit: '10mb' }));
-// app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// // Health check route
-// app.get("/health", (req, res) => {
-//   res.status(200).json({
-//     success: true,
-//     message: "Server is running healthy",
-//     timestamp: new Date().toISOString(),
-//     uptime: process.uptime()
-//   });
-// });
-
-// app.use((req, res, next) => {
-//   console.log('\n🔍 Request Debug:');
-//   console.log('Method:', req.method);
-//   console.log('Path:', req.path);
-//   console.log('Full URL:', req.originalUrl);
-//   console.log('Auth Header:', req.headers.authorization || 'NONE');
-//   console.log('---');
-//   next();
-// });
-
-// // // API routes (keep these as is)
-// // app.use("/api/users", userRouter);
-// // app.use("/api/categories", categoryRouter);
-// // app.use("/api/products", productRouter);
-
-
-
-// // API routes
-// app.use("/", userRouter);
-// app.use("/", categoryRouter);
-// app.use("/", productRouter);
-
-// // Add a 404 handler for undefined routes
-// // app.use("*", (req, res) => {
-// //   res.status(404).json({ 
-// //     success: false, 
-// //     message: "Route not found",
-// //     path: req.originalUrl 
-// //   });
-// // });
-
-// app.use((req, res) => {
-//   res.status(404).json({ 
-//     success: false, 
-//     message: "Route not found",
-//     path: req.originalUrl 
-//   });
-// });
-
-// // Global error handling middleware
-// app.use((error, req, res, next) => {
-//   console.error("Global Error Handler:", error);
-  
-//   // Prisma errors
-//   if (error.code?.startsWith('P')) {
-//     return res.status(400).json({
-//       success: false,
-//       message: "Database error occurred",
-//       error: process.env.NODE_ENV === 'development' ? error.message : undefined
-//     });
-//   }
-  
-//   // Default error response
-//   res.status(error.status || 500).json({
-//     success: false,
-//     message: error.message || "Internal server error",
-//     ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
-//   });
-// });
-
-// // Graceful shutdown
-// process.on('SIGINT', () => {
-//   console.log('Received SIGINT. Shutting down gracefully...');
-//   process.exit(0);
-// });
-
-// process.on('SIGTERM', () => {
-//   console.log('Received SIGTERM. Shutting down gracefully...');
-//   process.exit(0);
-// });
-
-// const port = process.env.PORT || 5000;
-// app.listen(port, () => {
-//   console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode`);
-//   console.log(`📍 Listening at port ${port}`);
-//   console.log(`🌐 Health check: http://localhost:${port}/health`);
-// });
 
 
 

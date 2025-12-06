@@ -114,75 +114,54 @@ exports.registerUser = async (req, res) => {
 
 exports.loginUser = async (req, res) => {
   try {
-    console.log('Login attempt - Request body:', req.body);
     const { email, password } = req.body;
 
-    //check all feilds are being passed
     if (!email) {
-      console.log('Login failed: Email not provided');
       return res
         .status(400)
         .json({ success: false, message: "Email field is not provided!" });
     }
     if (!password) {
-      console.log('Login failed: Password not provided');
       return res
         .status(400)
         .json({ success: false, message: "Password field is not provided!" });
     }
 
-    //check for user
     const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
-      console.log('Login failed: User not found with email:', email);
       return res.status(400).json({
         success: false,
-        message: "User with this email does not exist in database!",
+        message: "Invalid email or password!",
       });
     }
 
-    console.log('User found:', { id: user.id, email: user.email, role: user.role });
-
-    //validate password
     const validatePassword = await bcrypt.compare(password, user.password);
 
     if (!validatePassword) {
-      console.log('Login failed: Incorrect password for email:', email);
       return res
         .status(400)
-        .json({ success: false, message: "Password is incorrect!" });
+        .json({ success: false, message: "Invalid email or password!" });
     }
 
-    console.log('Password validated successfully');
-
-
-    //generate token
     const token = generateToken(user);
     if (!token) {
-      console.log('Login failed: Token generation failed');
-      return res.status(400).json({
+      return res.status(500).json({
         success: false,
-        message: "invalid or no token!",
+        message: "Token generation failed!",
       });
     }
 
-    console.log('Token generated successfully');
-
-    // Remove password from user object before sending
     const { password: _, ...userData } = user;
 
-    console.log('Login successful for user:', email);
     return res
       .status(200)
       .json({ success: true, message: "Login successful", token, data: userData });
   } catch (error) {
-    console.log("Login error:", error.message);
-    console.error("Full error:", error);
-
+    console.error("Login error:", error);
     return res.status(500).json({
       success: false,
-      message: "internal server error please try later!",
+      message: "Internal server error, please try again later!",
     });
   }
 };

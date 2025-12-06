@@ -5,21 +5,10 @@ dotenv.config();
 function generateToken(user) {
   const { firstname, lastname, email, phone, image, address, role, uuid, id } = user;
 
-  if (!firstname) {
-    console.log("Missing firstname field!");
+  if (!email || !id) {
+    throw new Error("Email and ID are required for token generation");
   }
-  if (!lastname) {
-    console.log("Missing lastname field!");
-  }
-  if (!email) {
-    console.log(" message: Missing email field!");
-  }
-  if (!phone) {
-    console.log("Missing phone field!");
-  }
-  if (!address) {
-    console.log("Missing address field!");
-  }
+
   const payload = {
     id,
     uuid,
@@ -30,7 +19,6 @@ function generateToken(user) {
     address,
     image,
     role,
-
   };
 
   const option = {
