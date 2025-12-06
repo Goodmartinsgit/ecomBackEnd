@@ -197,6 +197,13 @@ exports.verifyPayment = async (req, res) => {
     const orderId = data.data.tx_ref;
     const totalPrice = data.data.amount;
 
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID not found in transaction data!"
+      });
+    }
+
     // Get user and cart
     const user = await prisma.user.findUnique({
       where: { id: parseInt(userId) }
@@ -219,9 +226,33 @@ exports.verifyPayment = async (req, res) => {
     });
 
     if (!userCart || !userCart.productCarts.length) {
-      return res.status(400).json({
-        success: false,
-        message: "Cart is empty!"
+      console.warn(`Cart empty for user ${userId}, creating order without cart items`);
+      // Create order without cart items for completed payment
+      const order = await prisma.order.create({
+        data: {
+          orderId: orderId,
+          userId: parseInt(userId),
+          email: user.email,
+          amount: totalPrice,
+          status: "COMPLETED",
+          txRef: orderId,
+          transactionId: transaction_id,
+          cartItems: "[]",
+          paymentData: JSON.stringify(data.data),
+          paidAt: new Date()
+        }
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Payment verified successfully!",
+        data: {
+          orderId: order.id,
+          transactionId: transaction_id,
+          totalPrice: totalPrice,
+          order: order,
+          receiptItems: []
+        }
       });
     }
 
