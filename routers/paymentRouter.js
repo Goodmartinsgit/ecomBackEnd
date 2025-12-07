@@ -4,7 +4,7 @@ const { isUser } = require("../middlewares/auth");
 const paymentRouter = express.Router();
 
 // Get payment configuration (public key)
-router.get('/config', authenticate, paymentController.getPaymentConfig);
+paymentRouter.get('/config', isUser, getPaymentConfig);
 
 // Routes: /api/payment
 paymentRouter.post("/initialize", isUser, initializePayment);
