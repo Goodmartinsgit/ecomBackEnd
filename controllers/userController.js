@@ -1,5 +1,4 @@
-const { PrismaClient } = require("@prisma/client")
-const prisma = new PrismaClient()
+const { prisma } = require('../config/database')
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const uploadToCloudinary = require('../utils/uploadToCloudinary');
@@ -117,14 +116,19 @@ exports.registerUser = async (req, res) => {
 
 exports.loginUser = async (req, res) => {
   try {
+    console.log('Login attempt - Request body:', req.body);
+    console.log('Login attempt - Headers:', req.headers);
+    
     const { email, password } = req.body;
 
     if (!email) {
+      console.log('Login failed: No email provided');
       return res
         .status(400)
         .json({ success: false, message: "Email field is not provided!" });
     }
     if (!password) {
+      console.log('Login failed: No password provided');
       return res
         .status(400)
         .json({ success: false, message: "Password field is not provided!" });

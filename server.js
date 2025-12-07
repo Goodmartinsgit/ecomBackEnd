@@ -3,6 +3,7 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const { connectDatabase, disconnectDatabase } = require("./config/database");
 const userRouter = require("./routers/userRouter");
 const { categoryRouter } = require("./routers/categoryRouter");
 const productRouter = require("./routers/productRouter");
@@ -49,12 +50,18 @@ app.use(cors({
       return callback(null, true);
     }
     
+    // Allow localhost for development
+    if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+      return callback(null, true);
+    }
+    
     console.warn(`⚠️  Blocked by CORS: ${origin}`);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 200
 }));
 
 // Security middleware with relaxed settings for API
@@ -79,13 +86,15 @@ app.use(express.urlencoded({ extended: true }));
 
 
 
-// Request logging middleware (only in development)
-if (process.env.NODE_ENV === 'development') {
-  app.use((req, res, next) => {
-    console.log(`\n📨 ${req.method} ${req.originalUrl}`);
-    next();
-  });
-}
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`\n📨 ${req.method} ${req.originalUrl}`);
+  console.log('Headers:', req.headers);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log('Body:', req.body);
+  }
+  next();
+});
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -148,12 +157,38 @@ app.use((error, req, res, next) => {
 });
 
 const port = process.env.PORT || 5000;
-app.listen(port, () => {
-  console.log(`\n🚀 Server is running on port ${port}`);
-  console.log(`📍 Health check: http://localhost:${port}/health`);
-  console.log(`👤 Register: http://localhost:${port}/api/users/register`);
-  console.log(`🔐 Login: http://localhost:${port}/api/users/login\n`);
+
+// Start server with database connection
+async function startServer() {
+  const dbConnected = await connectDatabase();
+  
+  if (!dbConnected) {
+    console.error('\n❌ Failed to connect to database. Server not started.');
+    process.exit(1);
+  }
+  
+  app.listen(port, () => {
+    console.log(`\n🚀 Server is running on port ${port}`);
+    console.log(`📍 Health check: http://localhost:${port}/health`);
+    console.log(`👤 Register: http://localhost:${port}/api/users/register`);
+    console.log(`🔐 Login: http://localhost:${port}/api/users/login\n`);
+  });
+}
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\n⚠️  Shutting down gracefully...');
+  await disconnectDatabase();
+  process.exit(0);
 });
+
+process.on('SIGTERM', async () => {
+  console.log('\n⚠️  Shutting down gracefully...');
+  await disconnectDatabase();
+  process.exit(0);
+});
+
+startServer();
 
 
 
