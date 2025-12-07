@@ -3,6 +3,8 @@ const prisma = new PrismaClient();
 const { v4: uuidv4 } = require("uuid");
 const dotenv = require("dotenv");
 
+import { baseUrl } from "../config/config";
+
 dotenv.config();
 
 exports.initializePayment = async (req, res) => {
@@ -370,28 +372,42 @@ exports.verifyPayment = async (req, res) => {
   }
 };
 
-exports.getPaymentConfig = async (req, res) => {
+// Services/PaymentServices.js
+
+
+export const getPaymentConfig = async (token) => {
   try {
-    // Validate that keys are configured
-    if (!process.env.FLW_PUBLIC_KEY) {
-      console.error("FLW_PUBLIC_KEY is not configured");
-      return res.status(500).json({
-        success: false,
-        message: "Payment configuration not available!"
-      });
+    console.log('Fetching payment config from:', `${baseUrl}/api/payment/config`);
+    
+    const response = await fetch(`${baseUrl}/api/payment/config`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log('Response status:', response.status);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error response:', errorData);
+      throw new Error(errorData.message || 'Failed to fetch payment configuration');
     }
-
-    return res.status(200).json({
-      success: true,
-      flutterwavePublicKey: process.env.FLW_PUBLIC_KEY,
-      currency: "NGN"
-    });
-
+    
+    const data = await response.json();
+    console.log('Payment config data:', data);
+    
+    if (!data.flutterwavePublicKey) {
+      throw new Error('Public key not found in response');
+    }
+    
+    return {
+      publicKey: data.flutterwavePublicKey,
+      currency: data.currency || 'NGN'
+    };
   } catch (error) {
-    console.error("Get payment config error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to retrieve payment configuration!"
-    });
+    console.error('Error fetching payment config:', error);
+    throw error;
   }
 };
