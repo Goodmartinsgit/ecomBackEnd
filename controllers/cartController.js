@@ -1,30 +1,11 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const { prisma } = require('../config/database');
+const { validateCartItem, parseId, validateRequired } = require('../utils/validation');
 
 // Add to cart
 exports.addToCart = async (req, res) => {
-    const { userid, productid, color, size, quantity } = req.body;
-    
-    // Validate required fields
-    if (!userid || !productid) {
-        return res.status(400).json({
-            success: false,
-            message: "User ID and Product ID are required!"
-        });
-    }
-    
-    const userId = parseInt(userid);
-    const productId = parseInt(productid);
-    
-    // Validate parsed IDs
-    if (isNaN(userId) || isNaN(productId)) {
-        return res.status(400).json({
-            success: false,
-            message: "Invalid User ID or Product ID!"
-        });
-    }
-
     try {
+        const { userId, productId, selectedColor, selectedSize, quantity } = req.validatedData; // Already validated by middleware
+
         // Verify user exists
         const user = await prisma.user.findUnique({
             where: { id: userId }
@@ -56,7 +37,7 @@ exports.addToCart = async (req, res) => {
             });
         }
 
-        // Check if product already in cart
+        // Check if product already in cart with same size/color
         const existingCartItem = await prisma.productCart.findUnique({
             where: {
                 productId_cartId: {
@@ -68,29 +49,47 @@ exports.addToCart = async (req, res) => {
 
         let cartItem;
         if (existingCartItem) {
-            // Update quantity if item exists
-            cartItem = await prisma.productCart.update({
-                where: {
-                    productId_cartId: {
-                        productId: productId,
-                        cartId: existingCart.id
+            // Only update quantity if size and color match, otherwise treat as new item
+            const sizeMatches = existingCartItem.selectedSize === selectedSize;
+            const colorMatches = existingCartItem.selectedColor === selectedColor;
+            
+            if (sizeMatches && colorMatches) {
+                cartItem = await prisma.productCart.update({
+                    where: {
+                        productId_cartId: {
+                            productId: productId,
+                            cartId: existingCart.id
+                        }
+                    },
+                    data: {
+                        quantity: existingCartItem.quantity + quantity
                     }
-                },
-                data: {
-                    quantity: existingCartItem.quantity + (quantity ? parseInt(quantity) : 1),
-                    selectedColor: color || existingCartItem.selectedColor,
-                    selectedSize: size || existingCartItem.selectedSize
-                }
-            });
+                });
+            } else {
+                // Different size/color - replace with new selection
+                cartItem = await prisma.productCart.update({
+                    where: {
+                        productId_cartId: {
+                            productId: productId,
+                            cartId: existingCart.id
+                        }
+                    },
+                    data: {
+                        quantity: quantity,
+                        selectedColor: selectedColor,
+                        selectedSize: selectedSize
+                    }
+                });
+            }
         } else {
             // Add product to cart if it doesn't exist
             cartItem = await prisma.productCart.create({
                 data: {
                     product: { connect: { id: productId } },
                     cart: { connect: { id: existingCart.id } },
-                    selectedColor: color || null,
-                    selectedSize: size || null,
-                    quantity: quantity ? parseInt(quantity) : 1
+                    selectedColor: selectedColor || null,
+                    selectedSize: selectedSize || null,
+                    quantity
                 }
             });
         }
@@ -113,11 +112,14 @@ exports.addToCart = async (req, res) => {
 
 // Update cart
 exports.updateCart = async (req, res) => {
-    const { userid, productid, size, color, quantity } = req.body;
-    const userId = Number(userid);
-    const productId = Number(productid);
-
     try {
+        const { userid, productid, size, color, quantity } = req.body;
+        
+        validateRequired(userid, 'User ID');
+        validateRequired(productid, 'Product ID');
+        
+        const userId = parseId(userid, 'User ID');
+        const productId = parseId(productid, 'Product ID');
         const userCart = await prisma.cart.findUnique({
             where: { userId }
         });
@@ -145,11 +147,16 @@ exports.updateCart = async (req, res) => {
             });
         }
 
-        const payload = {
-            ...(quantity !== undefined && { quantity: Number(quantity) }),
-            ...(size && { selectedSize: size }),
-            ...(color && { selectedColor: color })
-        };
+        const payload = {};
+        if (quantity !== undefined) {
+            payload.quantity = parseId(quantity, 'Quantity');
+        }
+        if (size) {
+            payload.selectedSize = size.toString().trim();
+        }
+        if (color) {
+            payload.selectedColor = color.toString().trim();
+        }
 
         const updatedCart = await prisma.productCart.update({
             where: {
@@ -180,13 +187,12 @@ exports.updateCart = async (req, res) => {
 
 // Delete cart item
 exports.deleteCart = async (req, res) => {
-    const { userid } = req.params;
-    const { productid } = req.body;
-
-    const userId = parseInt(userid);
-    const productId = parseInt(productid);
-
     try {
+        const { userid: userId } = req.params; // Already validated by middleware
+        const { productid } = req.body;
+        
+        validateRequired(productid, 'Product ID');
+        const productId = parseId(productid, 'Product ID');
         const existingCart = await prisma.cart.findUnique({
             where: { userId }
         });
@@ -241,10 +247,8 @@ exports.deleteCart = async (req, res) => {
 
 // Get cart
 exports.getCart = async (req, res) => {
-    const { userid } = req.params;
-    const userId = parseInt(userid);
-
     try {
+        const { userid: userId } = req.params; // Already validated by middleware
         // Check if user is authenticated and authorized
         if (!req.user || !req.user.id) {
             return res.status(401).json({

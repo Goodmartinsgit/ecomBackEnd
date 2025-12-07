@@ -3,7 +3,10 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const compression = require("compression");
 const { connectDatabase, disconnectDatabase } = require("./config/database");
+const sanitizeInput = require('./middlewares/sanitization');
+const validateFieldSize = require('./middlewares/fieldSizeValidator');
 const userRouter = require("./routers/userRouter");
 const { categoryRouter } = require("./routers/categoryRouter");
 const productRouter = require("./routers/productRouter");
@@ -50,18 +53,12 @@ app.use(cors({
       return callback(null, true);
     }
     
-    // Allow localhost for development
-    if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
-      return callback(null, true);
-    }
-    
     console.warn(`⚠️  Blocked by CORS: ${origin}`);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  optionsSuccessStatus: 200
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Security middleware with relaxed settings for API
@@ -70,7 +67,10 @@ app.use(helmet({
   contentSecurityPolicy: false
 }));
 
-// Rate limiting
+// Compression middleware
+app.use(compression());
+
+// General rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -81,20 +81,54 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-
-
-// Request logging middleware
-app.use((req, res, next) => {
-  console.log(`\n📨 ${req.method} ${req.originalUrl}`);
-  console.log('Headers:', req.headers);
-  if (req.body && Object.keys(req.body).length > 0) {
-    console.log('Body:', req.body);
-  }
-  next();
+// Strict rate limiting for authentication endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit each IP to 5 requests per windowMs
+  message: {
+    success: false,
+    message: "Too many authentication attempts, please try again later."
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
+
+// Password reset rate limiting
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // limit each IP to 3 password reset requests per hour
+  message: {
+    success: false,
+    message: "Too many password reset attempts, please try again later."
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Field size validation
+app.use(validateFieldSize);
+
+// Global input sanitization
+app.use(sanitizeInput);
+
+// Apply auth rate limiting to specific routes
+app.use('/api/users/login', authLimiter);
+app.use('/api/users/register', authLimiter);
+app.use('/api/users/forgot-password', passwordResetLimiter);
+app.use('/api/users/reset-password', passwordResetLimiter);
+
+
+
+// Request logging middleware (only in development)
+if (process.env.NODE_ENV === 'development') {
+  app.use((req, res, next) => {
+    console.log(`\n📨 ${req.method} ${req.originalUrl}`);
+    next();
+  });
+}
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -105,7 +139,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Mount routers with proper prefixes
+// Mount routers with proper prefixes and rate limiting
 app.use("/api/users", userRouter);
 app.use("/api/categories", categoryRouter);
 app.use("/api/products", productRouter);
@@ -136,25 +170,8 @@ app.use((req, res) => {
 });
 
 // Global error handling middleware
-app.use((error, req, res, next) => {
-  console.error("Global Error Handler:", error);
-
-  // Prisma errors
-  if (error.code?.startsWith('P')) {
-    return res.status(400).json({
-      success: false,
-      message: "Database error occurred",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-
-  // Default error response
-  res.status(error.status || 500).json({
-    success: false,
-    message: error.message || "Internal server error",
-    ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
-  });
-});
+const { globalErrorHandler } = require('./utils/errorHandler');
+app.use(globalErrorHandler);
 
 const port = process.env.PORT || 5000;
 

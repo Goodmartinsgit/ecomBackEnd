@@ -1,13 +1,13 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { prisma } = require('../config/database');
+const { sanitize, validateRequired, parseId } = require('../utils/validation');
 
 exports.createCategory = async (req, res) => {
-    const { name } = req.body;
+    let { name } = req.body;
 
     try {
-        if (!name) {
-            return res.status(400).json({ success: false, message: "Category name is required!" });
-        }
+        // Sanitize and validate input
+        name = sanitize(name);
+        validateRequired(name, 'Category name');
 
         // Check if category already exists
         const existingCategory = await prisma.category.findUnique({
@@ -61,8 +61,12 @@ exports.getAllCategories = async (req, res) => {
 };
 
 exports.getSingleCategory = async (req, res) => {
-    const { name } = req.params;
+    let { name } = req.params;
     try {
+        // Sanitize input
+        name = sanitize(name);
+        validateRequired(name, 'Category name');
+        
         const singleCategory = await prisma.category.findUnique({
             where: { name }
         });
@@ -85,10 +89,15 @@ exports.getSingleCategory = async (req, res) => {
 };
 
 exports.updateCategory = async (req, res) => {
-    const { name, id } = req.body;
+    let { name, id } = req.body;
 
-    const parsedId = parseInt(id);
     try {
+        // Sanitize and validate inputs
+        name = sanitize(name);
+        validateRequired(name, 'Category name');
+        validateRequired(id, 'Category ID');
+        const parsedId = parseId(id, 'Category ID');
+        
         //check if category exists
         const existingCategory = await prisma.category.findUnique({
             where: { id: parsedId }
@@ -101,9 +110,7 @@ exports.updateCategory = async (req, res) => {
             where: { id: parsedId },
             data: { name },
         });
-        if (!updatedCategory) {
-            return res.status(400).json({ success: false, message: "Unable to update category!" });
-        }
+        
         res.status(200).json({
             success: true,
             message: "Category updated successfully",
@@ -122,8 +129,11 @@ exports.updateCategory = async (req, res) => {
 exports.deleteCategory = async (req, res) => {
     const { id } = req.body;
 
-    const parsedId = parseInt(id);
     try {
+        // Validate input
+        validateRequired(id, 'Category ID');
+        const parsedId = parseId(id, 'Category ID');
+        
         const existingCategory = await prisma.category.findUnique({
             where: { id: parsedId }
         });
@@ -135,9 +145,7 @@ exports.deleteCategory = async (req, res) => {
         const deletedCategory = await prisma.category.delete({
             where: { id: parsedId }
         });
-        if (!deletedCategory) {
-            return res.status(400).json({ success: false, message: "Unable to delete category!" });
-        }
+        
         return res.status(200).json({
             success: true,
             message: "Category deleted successfully",

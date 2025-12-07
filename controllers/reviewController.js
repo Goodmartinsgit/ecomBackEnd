@@ -1,26 +1,39 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const { prisma } = require('../config/database');
+const { validateRequired, parseId, sanitize, parsePositiveFloat } = require('../utils/validation');
 
 // Create a review
 exports.createReview = async (req, res) => {
   try {
-    const { orderId, productId, rating, comment } = req.body;
+    let { orderId, productId, rating, comment } = req.body;
     const userId = req.user.id;
     const images = req.files?.map(file => file.path) || [];
 
-    // Validate rating
-    if (!rating || rating < 1 || rating > 5) {
+    // Validate required fields
+    validateRequired(orderId, 'Order ID');
+    validateRequired(productId, 'Product ID');
+    validateRequired(rating, 'Rating');
+    
+    // Parse and validate IDs
+    const parsedOrderId = parseId(orderId, 'Order ID');
+    const parsedProductId = parseId(productId, 'Product ID');
+    const parsedRating = parseId(rating, 'Rating');
+    
+    // Validate rating range
+    if (parsedRating < 1 || parsedRating > 5) {
       return res.status(400).json({
         success: false,
         message: "Rating must be between 1 and 5"
       });
     }
+    
+    // Sanitize comment
+    if (comment) comment = sanitize(comment);
 
     // Check if order exists and belongs to user
     const order = await prisma.order.findFirst({
       where: {
-        id: parseInt(orderId),
-        userId: parseInt(userId),
+        id: parsedOrderId,
+        userId: userId,
         status: "DELIVERED"
       }
     });
@@ -35,9 +48,9 @@ exports.createReview = async (req, res) => {
     // Check if review already exists
     const existingReview = await prisma.review.findFirst({
       where: {
-        orderId: parseInt(orderId),
-        userId: parseInt(userId),
-        productId: parseInt(productId)
+        orderId: parsedOrderId,
+        userId: userId,
+        productId: parsedProductId
       }
     });
 
@@ -51,10 +64,10 @@ exports.createReview = async (req, res) => {
     // Create review
     const review = await prisma.review.create({
       data: {
-        orderId: parseInt(orderId),
-        userId: parseInt(userId),
-        productId: parseInt(productId),
-        rating: parseInt(rating),
+        orderId: parsedOrderId,
+        userId: userId,
+        productId: parsedProductId,
+        rating: parsedRating,
         comment: comment || "",
         images: images
       }
@@ -78,10 +91,13 @@ exports.createReview = async (req, res) => {
 exports.getProductReviews = async (req, res) => {
   try {
     const { productId } = req.params;
+    
+    validateRequired(productId, 'Product ID');
+    const parsedProductId = parseId(productId, 'Product ID');
 
     const reviews = await prisma.review.findMany({
       where: {
-        productId: parseInt(productId)
+        productId: parsedProductId
       },
       include: {
         order: {

@@ -1,5 +1,5 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const { prisma } = require('../config/database');
+const { validateRequired, parseId } = require('../utils/validation');
 
 // GET user wishlist
 exports.getWishlist = async (req, res) => {
@@ -45,17 +45,12 @@ exports.addToWishlist = async (req, res) => {
 
     console.log('Add to wishlist request:', { userId, productId, body: req.body });
 
-    if (!productId) {
-      return res.status(400).json({
-        success: false,
-        message: "Product ID is required",
-        received: req.body
-      });
-    }
+    validateRequired(productId, 'Product ID');
+    const parsedProductId = parseId(productId, 'Product ID');
 
     // Check if product exists
     const product = await prisma.product.findUnique({
-      where: { id: parseInt(productId) }
+      where: { id: parsedProductId }
     });
 
     if (!product) {
@@ -76,7 +71,7 @@ exports.addToWishlist = async (req, res) => {
     const existing = await prisma.wishlistItem.findFirst({
       where: {
         wishlistId: wishlist.id,
-        productId: parseInt(productId)
+        productId: parsedProductId
       }
     });
 
@@ -90,7 +85,7 @@ exports.addToWishlist = async (req, res) => {
     const wishlistItem = await prisma.wishlistItem.create({
       data: {
         wishlistId: wishlist.id,
-        productId: parseInt(productId)
+        productId: parsedProductId
       },
       include: {
         product: true
@@ -116,6 +111,9 @@ exports.removeFromWishlist = async (req, res) => {
   try {
     const userId = req.user.id;
     const { productId } = req.params;
+    
+    validateRequired(productId, 'Product ID');
+    const parsedProductId = parseId(productId, 'Product ID');
 
     const wishlist = await prisma.wishlist.findUnique({
       where: { userId }
@@ -131,7 +129,7 @@ exports.removeFromWishlist = async (req, res) => {
     const wishlistItem = await prisma.wishlistItem.findFirst({
       where: {
         wishlistId: wishlist.id,
-        productId: parseInt(productId)
+        productId: parsedProductId
       }
     });
 

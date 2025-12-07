@@ -1,13 +1,5 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  errorFormat: 'pretty'
-});
-
-// Handle Prisma client disconnection
-process.on('beforeExit', async () => {
-  await prisma.$disconnect();
-});
+const { prisma } = require('../config/database');
+const { validateRequired, sanitize, parseId } = require('../utils/validation');
 
 // GET user orders with pagination and filtering
 exports.getUserOrders = async (req, res) => {
@@ -65,6 +57,8 @@ exports.getOrderDetails = async (req, res) => {
   try {
     const userId = req.user.id;
     const { orderId } = req.params;
+    
+    validateRequired(orderId, 'Order ID');
 
     const order = await prisma.order.findFirst({
       where: {
@@ -109,6 +103,8 @@ exports.cancelOrder = async (req, res) => {
   try {
     const userId = req.user.id;
     const { orderId } = req.params;
+    
+    validateRequired(orderId, 'Order ID');
 
     const order = await prisma.order.findFirst({
       where: {
@@ -332,13 +328,22 @@ exports.getAdminOrderStats = async (req, res) => {
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { status, location, description, trackingNumber } = req.body;
+    let { status, location, description, trackingNumber } = req.body;
+    
+    validateRequired(orderId, 'Order ID');
+    validateRequired(status, 'Status');
+    
+    // Sanitize inputs
+    status = sanitize(status);
+    if (location) location = sanitize(location);
+    if (description) description = sanitize(description);
+    if (trackingNumber) trackingNumber = sanitize(trackingNumber);
 
     const validStatuses = ['PENDING', 'PROCESSING', 'SHIPPED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'FAILED', 'CANCELLED'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid order status"
+        message: "Invalid order status. Valid statuses: " + validStatuses.join(', ')
       });
     }
 
@@ -406,6 +411,8 @@ exports.getOrderTracking = async (req, res) => {
   try {
     const { orderId } = req.params;
     const userId = req.user?.id;
+    
+    validateRequired(orderId, 'Order ID');
 
     const where = { orderId };
     if (req.user.role !== 'ADMIN') {

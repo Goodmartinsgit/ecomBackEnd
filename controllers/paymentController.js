@@ -1,12 +1,8 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const { prisma } = require('../config/database');
 const { v4: uuidv4 } = require("uuid");
 const dotenv = require("dotenv");
 
 dotenv.config();
-
-// REMOVE THIS LINE - it's causing the error
-// import { baseUrl } from "../config/config";
 
 // Add this function
 exports.getPaymentConfig = async (req, res) => {
@@ -297,40 +293,39 @@ exports.verifyPayment = async (req, res) => {
       });
     }
 
-    // Create order
-    console.log("Creating order...");
-    const order = await prisma.order.create({
-      data: {
-        orderId: orderId,
-        userId: parseInt(userId),
-        email: user.email,
-        amount: totalPrice,
-        status: "COMPLETED",
-        txRef: orderId,
-        transactionId: transaction_id,
-        cartItems: JSON.stringify(userCart.productCarts),
-        paymentData: JSON.stringify(data.data),
-        paidAt: new Date(),
-        orderItems: {
-          create: userCart.productCarts.map(item => ({
-            productId: item.productId,
-            quantity: item.quantity || 1,
-            price: item.product.price
-          }))
+    // Use transaction to ensure atomicity
+    console.log("Creating order in transaction...");
+    const result = await prisma.$transaction(async (tx) => {
+      // Create order
+      const order = await tx.order.create({
+        data: {
+          orderId: orderId,
+          userId: parseInt(userId),
+          email: user.email,
+          amount: totalPrice,
+          status: "COMPLETED",
+          txRef: orderId,
+          transactionId: transaction_id,
+          cartItems: JSON.stringify(userCart.productCarts),
+          paymentData: JSON.stringify(data.data),
+          paidAt: new Date(),
+          orderItems: {
+            create: userCart.productCarts.map(item => ({
+              productId: item.productId,
+              quantity: item.quantity || 1,
+              price: item.product.price
+            }))
+          }
+        },
+        include: {
+          orderItems: {
+            include: { product: true }
+          }
         }
-      },
-      include: {
-        orderItems: {
-          include: { product: true }
-        }
-      }
-    });
+      });
 
-    // Create receipt with items
-    let receiptItems = [];
-    try {
-      console.log("Creating receipt...");
-      const receipt = await prisma.receipt.create({
+      // Create receipt with items
+      const receipt = await tx.receipt.create({
         data: {
           userId: parseInt(userId),
           orderId: orderId,
@@ -355,28 +350,18 @@ exports.verifyPayment = async (req, res) => {
           receiptItems: true
         }
       });
-      receiptItems = receipt.receiptItems;
-      console.log("Receipt created successfully");
-    } catch (receiptError) {
-      console.error("Failed to create receipt:", receiptError);
-      // Continue without receipt - order is already created
-      receiptItems = userCart.productCarts.map(item => ({
-        productId: item.productId,
-        name: item.product.name,
-        image: item.product.image,
-        price: item.product.price,
-        quantity: item.quantity || 1,
-        total: item.product.price * (item.quantity || 1)
-      }));
-    }
 
-    // Clear user's cart
-    console.log("Clearing cart...");
-    await prisma.productCart.deleteMany({
-      where: { cartId: userCart.id }
+      // Clear user's cart
+      await tx.productCart.deleteMany({
+        where: { cartId: userCart.id }
+      });
+
+      return { order, receiptItems: receipt.receiptItems };
     });
 
-    console.log("Payment verification completed successfully");
+    const { order, receiptItems } = result;
+    console.log("Transaction completed successfully");
+
     return res.status(200).json({
       success: true,
       message: "Payment verified successfully!",

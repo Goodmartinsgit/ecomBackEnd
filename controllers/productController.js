@@ -1,9 +1,12 @@
-const { PrismaClient } = require("@prisma/client");
+const { prisma } = require('../config/database');
 const uploadToCloudinary = require("../utils/uploadToCloudinary");
-const prisma = new PrismaClient();
+const { sanitize, validateRequired, parseId, parsePositiveFloat, validateProductUpdate } = require('../utils/validation');
 
-exports.createProduct = async (req, res) => {
-  const {
+const { AppError, catchAsync } = require('../utils/errorHandler');
+const logger = require('../utils/logger');
+
+exports.createProduct = catchAsync(async (req, res, next) => {
+  let {
     name,
     description,
     price,
@@ -22,266 +25,184 @@ exports.createProduct = async (req, res) => {
     categoryId,
   } = req.body;
 
-  try {
-    // Validate required fields
-    const requiredFields = {
+  name = sanitize(name);
+  description = sanitize(description);
+  currency = sanitize(currency);
+  defaultSize = sanitize(defaultSize);
+  defaultColor = sanitize(defaultColor);
+  subcategory = sanitize(subcategory);
+
+  validateRequired(name, 'Name');
+  validateRequired(description, 'Description');
+  validateRequired(price, 'Price');
+  validateRequired(currency, 'Currency');
+  validateRequired(sizes, 'Sizes');
+  validateRequired(defaultSize, 'Default size');
+  validateRequired(colors, 'Colors');
+  validateRequired(defaultColor, 'Default color');
+  validateRequired(subcategory, 'Subcategory');
+  validateRequired(categoryId, 'Category ID');
+
+  const parsedPrice = parsePositiveFloat(price, 'Price');
+  const parsedRating = rating ? parsePositiveFloat(rating, 'Rating') : 0;
+  const parsedDiscount = discount ? parseFloat(discount) : 0;
+  const parsedCategoryId = parseId(categoryId, 'Category ID');
+
+  const categoryExists = await prisma.category.findUnique({
+    where: { id: parsedCategoryId },
+  });
+
+  if (!categoryExists) {
+    const availableCategories = await prisma.category.findMany({
+      select: { id: true, name: true },
+    });
+    throw new AppError(`Category with ID ${parsedCategoryId} does not exist`, 400, 'CATEGORY_NOT_FOUND').setData({ availableCategories });
+  }
+
+  let parsedSizes = Array.isArray(sizes) ? sizes : JSON.parse(sizes);
+  let parsedColors = Array.isArray(colors) ? colors : JSON.parse(colors);
+  let parsedTags = tags ? (Array.isArray(tags) ? tags : JSON.parse(tags)) : [];
+
+  const existingProduct = await prisma.product.findFirst({
+    where: { name },
+  });
+
+  if (existingProduct) {
+    throw new AppError('Product already exists', 400, 'PRODUCT_EXISTS');
+  }
+
+  let imageUrl = null;
+  if (req.file) {
+    imageUrl = await uploadToCloudinary(req.file.buffer, "image", "Product");
+  }
+
+  if (!imageUrl) {
+    imageUrl = "";
+  }
+
+  const parsedStock = stock ? parseInt(stock) : 0;
+
+  const newProduct = await prisma.product.create({
+    data: {
       name,
       description,
-      price,
+      price: parsedPrice,
       currency,
-      sizes,
+      sizes: parsedSizes,
       defaultSize,
-      colors,
+      colors: parsedColors,
       defaultColor,
+      bestSeller: bestSeller === true || bestSeller === "true",
+      newArrival: newArrival === true || newArrival === "true",
       subcategory,
-      categoryId,
-    };
+      rating: parsedRating,
+      discount: parsedDiscount,
+      tags: parsedTags,
+      stock: parsedStock,
+      categoryId: parsedCategoryId,
+      image: imageUrl,
+    },
+  });
 
-    for (let [key, value] of Object.entries(requiredFields)) {
-      if (value === undefined || value === null || value === "") {
-        return res.status(400).json({
-          success: false,
-          message: `Missing required field: ${key}`,
-        });
-      }
+  logger.info('Product created', { productId: newProduct.id, name: newProduct.name });
+
+  return res.status(201).json({
+    success: true,
+    message: "Product created successfully!",
+    data: newProduct,
+  });
+});
+
+exports.getAllProducts = catchAsync(async (req, res, next) => {
+  const allProducts = await prisma.product.findMany({
+    include: {
+      category: true
     }
+  });
 
-    // Parse and validate numeric fields
-    const parsedPrice = parseFloat(price);
-    const parsedRating = rating ? parseFloat(rating) : 0;
-    const parsedDiscount = discount ? parseFloat(discount) : 0;
-    const parsedCategoryId = parseInt(categoryId);
+  res.status(200).json({
+    success: true,
+    message: "Products retrieved successfully",
+    data: allProducts,
+  });
+});
 
-    if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid price value",
-      });
-    }
-
-    if (isNaN(parsedCategoryId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid categoryId value",
-      });
-    }
-
-    // Check if category exists
-    const categoryExists = await prisma.category.findUnique({
-      where: { id: parsedCategoryId },
-    });
-
-    if (!categoryExists) {
-      // Get all available categories to help the user
-      const availableCategories = await prisma.category.findMany({
-        select: { id: true, name: true },
-      });
-
-      return res.status(400).json({
-        success: false,
-        message: `Category with ID ${parsedCategoryId} does not exist`,
-        availableCategories,
-      });
-    }
-
-    // Parse array fields if they're strings
-    let parsedSizes = Array.isArray(sizes) ? sizes : JSON.parse(sizes);
-    let parsedColors = Array.isArray(colors) ? colors : JSON.parse(colors);
-    let parsedTags = tags ? (Array.isArray(tags) ? tags : JSON.parse(tags)) : [];
-
-    const existingProduct = await prisma.product.findFirst({
-      where: { name },
-    });
-
-    if (existingProduct) {
-      return res.status(400).json({
-        success: false,
-        message: "Product already exists!",
-      });
-    }
-
-    let imageUrl = null;
-    if (req.file) {
-      imageUrl = await uploadToCloudinary(req.file.buffer, "image", "Product");
-    }
-
-    // Ensure imageUrl is not null for schema requirement
-    if (!imageUrl) {
-      imageUrl = ""; // or provide a default image URL
-    }
-
-    // Parse stock
-    const parsedStock = stock ? parseInt(stock) : 0;
-
-    const newProduct = await prisma.product.create({
-      data: {
-        name,
-        description,
-        price: parsedPrice,
-        currency,
-        sizes: parsedSizes,
-        defaultSize,
-        colors: parsedColors,
-        defaultColor,
-        bestSeller: bestSeller === true || bestSeller === "true",
-        newArrival: newArrival === true || newArrival === "true",
-        subcategory,
-        rating: parsedRating,
-        discount: parsedDiscount,
-        tags: parsedTags,
-        stock: parsedStock,
-        categoryId: parsedCategoryId,
-        image: imageUrl,
-      },
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: "Product created successfully!",
-      data: newProduct,
-    });
-  } catch (error) {
-    console.error("Error creating product:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error, please try again later!",
-      error: error.message,
-    });
-  }
-};
-
-exports.getAllProducts = async (req, res) => {
-  try {
-    const allProducts = await prisma.product.findMany({
-      include: {
-        category: true
-      }
-    });
-
-    res.status(200).json({
-      success: true,
-      message: "Products retrieved successfully",
-      data: allProducts,
-    });
-  } catch (error) {
-    console.error("Get products error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error, please try again later!",
-    });
-  }
-};
-
-exports.getSingleProduct = async (req, res) => {
+exports.getSingleProduct = catchAsync(async (req, res, next) => {
   const { id } = req.params;
-  try {
-    if (!id) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Product ID is required!" });
-    }
-    const parsedId = parseInt(id);
-    if (isNaN(parsedId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid product ID!" });
-    }
-    const product = await prisma.product.findUnique({
-      where: { id: parsedId },
-    });
-    if (!product) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Product not found!" });
-    }
-    res.status(200).json({
-      success: true,
-      message: "Product retrieved successfully",
-      data: product,
-    });
-  } catch (error) {
-    console.error("Get product error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error, please try again later!",
-    });
+  const parsedId = parseId(id, 'Product ID');
+  
+  const product = await prisma.product.findUnique({
+    where: { id: parsedId },
+  });
+  
+  if (!product) {
+    throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
   }
-};
+  
+  res.status(200).json({
+    success: true,
+    message: "Product retrieved successfully",
+    data: product,
+  });
+});
 
-exports.updateProduct = async (req, res) => {
-  const { id, value } = req.body;
-  const parsedId = parseInt(id);
+exports.updateProduct = catchAsync(async (req, res, next) => {
+  const { id, updateData } = req.validatedData;
 
-  try {
-    const existingProduct = await prisma.product.findUnique({
-      where: { id: parsedId },
-    });
-    if (!existingProduct) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Product does not exist in database!",
-        });
-    }
-
-    const updatedProduct = await prisma.product.update({
-      where: { id: parsedId },
-      data: { ...value },
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "Product updated successfully!",
-      data: updatedProduct,
-    });
-  } catch (error) {
-    console.error("Update product error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error, please try again later!",
-    });
+  const existingProduct = await prisma.product.findUnique({
+    where: { id },
+  });
+  
+  if (!existingProduct) {
+    throw new AppError('Product does not exist', 404, 'PRODUCT_NOT_FOUND');
   }
-};
 
-exports.deleteProduct = async (req, res) => {
+  if (updateData.categoryId) {
+    const categoryExists = await prisma.category.findUnique({
+      where: { id: updateData.categoryId },
+    });
+    if (!categoryExists) {
+      throw new AppError(`Category with ID ${updateData.categoryId} does not exist`, 400, 'CATEGORY_NOT_FOUND');
+    }
+  }
+
+  const updatedProduct = await prisma.product.update({
+    where: { id },
+    data: updateData,
+  });
+
+  logger.info('Product updated', { productId: updatedProduct.id });
+
+  return res.status(200).json({
+    success: true,
+    message: "Product updated successfully!",
+    data: updatedProduct,
+  });
+});
+
+exports.deleteProduct = catchAsync(async (req, res, next) => {
   const { id } = req.body;
-  try {
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "Product ID is required!",
-      });
-    }
-    const parsedId = parseInt(id);
-    if (isNaN(parsedId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid product ID!",
-      });
-    }
-    const existingProduct = await prisma.product.findUnique({
-      where: { id: parsedId },
-    });
-    if (!existingProduct) {
-      return res.status(404).json({
-        success: false,
-        message: "Product does not exist in database!",
-      });
-    }
-    const deletedProduct = await prisma.product.delete({
-      where: { id: parsedId },
-    });
-    res.status(200).json({
-      success: true,
-      message: "Product deleted successfully",
-      data: deletedProduct,
-    });
-  } catch (error) {
-    console.error("Delete product error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error, please try again later!",
-    });
+  
+  validateRequired(id, 'Product ID');
+  const parsedId = parseId(id, 'Product ID');
+  
+  const existingProduct = await prisma.product.findUnique({
+    where: { id: parsedId },
+  });
+  
+  if (!existingProduct) {
+    throw new AppError('Product does not exist', 404, 'PRODUCT_NOT_FOUND');
   }
-};
+  
+  const deletedProduct = await prisma.product.delete({
+    where: { id: parsedId },
+  });
+  
+  logger.info('Product deleted', { productId: parsedId });
+  
+  res.status(200).json({
+    success: true,
+    message: "Product deleted successfully",
+    data: deletedProduct,
+  });
+});
