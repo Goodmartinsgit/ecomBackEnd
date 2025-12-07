@@ -369,3 +369,29 @@ exports.verifyPayment = async (req, res) => {
     });
   }
 };
+
+exports.getPaymentConfig = async (req, res) => {
+  try {
+    // Validate that keys are configured
+    if (!process.env.FLW_PUBLIC_KEY) {
+      console.error("FLW_PUBLIC_KEY is not configured");
+      return res.status(500).json({
+        success: false,
+        message: "Payment configuration not available!"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      flutterwavePublicKey: process.env.FLW_PUBLIC_KEY,
+      currency: "NGN"
+    });
+
+  } catch (error) {
+    console.error("Get payment config error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve payment configuration!"
+    });
+  }
+};
