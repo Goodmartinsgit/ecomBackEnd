@@ -4,10 +4,39 @@ const prisma = new PrismaClient();
 // Add to cart
 exports.addToCart = async (req, res) => {
     const { userid, productid, color, size, quantity } = req.body;
+    
+    // Validate required fields
+    if (!userid || !productid) {
+        return res.status(400).json({
+            success: false,
+            message: "User ID and Product ID are required!"
+        });
+    }
+    
     const userId = parseInt(userid);
     const productId = parseInt(productid);
+    
+    // Validate parsed IDs
+    if (isNaN(userId) || isNaN(productId)) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid User ID or Product ID!"
+        });
+    }
 
     try {
+        // Verify user exists
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found!"
+            });
+        }
+        
         const existingCart = await prisma.cart.upsert({
             where: { userId },
             update: {},
