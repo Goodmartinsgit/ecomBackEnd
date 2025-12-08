@@ -16,6 +16,7 @@ const addressRouter = require("./routers/addressRouter");
 const orderRouter = require("./routers/orderRouter");
 const wishlistRouter = require("./routers/wishlistRouter");
 const reviewRouter = require("./routers/reviewRouter");
+const { swaggerUi, swaggerSpec } = require("./swagger/swagger");
 
 dotenv.config();
 
@@ -172,7 +173,6 @@ app.use((req, res) => {
 
 // Global error handling middleware
 const { globalErrorHandler } = require('./utils/errorHandler');
-const { swaggerUi } = require("./swagger/swagger");
 app.use(globalErrorHandler);
 
 const port = process.env.PORT || 5000;
