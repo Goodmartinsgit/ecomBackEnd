@@ -36,7 +36,11 @@ const app = express();
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
-  "https://ecommerce-henna-tau-1aw50dd4fi.vercel.app"
+  "http://localhost:3000",
+  // Production Vercel domains
+  "https://ecommerce-henna-tau-1aw50dd4fi.vercel.app",
+  "https://ecommerce-git-master-ecommercs-projects-495935a9.vercel.app",
+  "https://ecommerce-1as2klzhq-ecommercs-projects-495935a9.vercel.app"
 ].filter(Boolean);
 
 app.use(cors({
