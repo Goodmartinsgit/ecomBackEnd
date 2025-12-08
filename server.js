@@ -149,6 +149,7 @@ app.use("/api/addresses", addressRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/wishlist", wishlistRouter);
 app.use("/api/reviews", reviewRouter);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
 // 404 handler for undefined routes
 app.use((req, res) => {
@@ -171,6 +172,7 @@ app.use((req, res) => {
 
 // Global error handling middleware
 const { globalErrorHandler } = require('./utils/errorHandler');
+const { swaggerUi } = require("./swagger/swagger");
 app.use(globalErrorHandler);
 
 const port = process.env.PORT || 5000;
