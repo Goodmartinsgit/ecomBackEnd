@@ -105,9 +105,9 @@ exports.loginUser = catchAsync(async (req, res, next) => {
     throw new AppError("Invalid email or password!", 401, 'INVALID_CREDENTIALS');
   }
 
-  const validatePassword = await bcrypt.compare(password, user.password);
+  const isPasswordValid = await bcrypt.compare(password, user.password);
 
-  if (!validatePassword) {
+  if (!isPasswordValid) {
     throw new AppError("Invalid email or password!", 401, 'INVALID_CREDENTIALS');
   }
 
