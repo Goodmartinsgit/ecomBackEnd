@@ -56,15 +56,19 @@ exports.getUserOrders = async (req, res) => {
 exports.getOrderDetails = async (req, res) => {
   try {
     const userId = req.user.id;
+    const userRole = req.user.role;
     const { orderId } = req.params;
     
     validateRequired(orderId, 'Order ID');
 
+    const where = { orderId };
+    // If not admin, restrict to own orders
+    if (userRole !== 'ADMIN') {
+      where.userId = userId;
+    }
+
     const order = await prisma.order.findFirst({
-      where: {
-        orderId: orderId,
-        userId: userId
-      },
+      where,
       include: {
         orderItems: {
           include: {
@@ -74,7 +78,16 @@ exports.getOrderDetails = async (req, res) => {
         trackingHistory: {
           orderBy: { createdAt: 'desc' }
         },
-        reviews: true
+        reviews: true,
+        user: { // Include user details for admin view
+          select: {
+            firstname: true,
+            lastname: true,
+            email: true,
+            phone: true,
+            address: true
+          }
+        }
       }
     });
 
