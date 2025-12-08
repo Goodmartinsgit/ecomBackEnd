@@ -75,16 +75,23 @@ app.use(helmet({
 // Compression middleware
 app.use(compression());
 
-// General rate limiting
+// General rate limiting - apply only to API routes, not static assets
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 500, // Increased from 100 to 500 for production use
   message: {
     success: false,
     message: "Too many requests from this IP, please try again later."
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Skip rate limiting for certain paths
+  skip: (req) => {
+    // Skip rate limiting for health checks
+    return req.path === '/health';
   }
 });
-app.use(limiter);
+app.use('/api', limiter); // Only apply to /api routes
 
 // Strict rate limiting for authentication endpoints
 const authLimiter = rateLimit({
