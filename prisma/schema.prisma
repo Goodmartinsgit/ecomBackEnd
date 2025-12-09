@@ -79,6 +79,7 @@ model Cart {
 }
 
 model ProductCart {
+  id            Int      @id @default(autoincrement())
   productId     Int
   product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   cartId        Int
@@ -89,7 +90,9 @@ model ProductCart {
   createdAt     DateTime @default(now())
   updatedAt     DateTime? @updatedAt
 
-  @@id([productId, cartId])
+
+  @@unique([productId, cartId, selectedSize, selectedColor], name: "productCart_variant_unique")
+  @@index([productId])
   @@index([cartId])
 }
 
