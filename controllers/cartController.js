@@ -61,7 +61,7 @@ exports.addToCart = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Add to cart error:", error);
+        console.error("Add to cart error:", error.message, error.code, error);
         return res.status(500).json({
             success: false,
             message: "Internal server error!"
@@ -136,7 +136,7 @@ exports.updateCart = async (req, res) => {
 exports.deleteCart = async (req, res) => {
     try {
         const { userid: userId } = req.params; // Already validated by middleware
-        const { productid } = req.body;
+        const { productid, size, color } = req.body;
         
         validateRequired(productid, 'Product ID');
         const productId = parseId(productid, 'Product ID');
@@ -151,7 +151,7 @@ exports.deleteCart = async (req, res) => {
             });
         }
 
-        const existingCartItem = await prisma.productCart.findFirst({ where: { productId: productId, cartId: existingCart.id } });
+        const existingCartItem = await prisma.productCart.findFirst({ where: { productId: productId, cartId: existingCart.id, selectedSize: size || null, selectedColor: color || null } });
 
         if (!existingCartItem) {
             return res.status(404).json({
